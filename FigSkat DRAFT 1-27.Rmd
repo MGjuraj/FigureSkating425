@@ -1,0 +1,73 @@
+---
+title: "Figure Skating DRAFT"
+author: "Mark Gjuraj"
+date: "1/27/2022"
+output: html_document
+---
+
+```{r}
+# SCORES
+d = read.csv('scores.csv', stringsAsFactors = FALSE)
+dim(d)
+str(d)
+head(d, 10)
+```
+
+```{r}
+# SKATERS
+s = read.csv('skaters2022.csv', stringsAsFactors = FALSE)
+dim(s)
+str(s)
+head(s, 10)
+```
+
+```{r}
+# JUDGES
+j = read.csv('judges2022.csv', stringsAsFactors = FALSE)
+dim(j)
+str(j)
+head(j, 10)
+```
+
+```{r}
+d = d %>%
+  mutate(score = ifelse(segment == 'short',
+                        2 * score,
+                        score)) %>%
+  filter(judge != 'Mean')
+d = d %>%
+  mutate(same.country = ifelse(country == jcountry, 1, 0))
+m1 = lm(score ~ segment + same.country + skater + judge, data=d)
+summary(m1)$adj.r
+```
+
+```{r}
+short <- expand_grid(s, j)
+short$segment <- rep("short", 390)
+head(short, 10)
+dim(short)
+
+free <- expand_grid(s, j)
+free$segment <- rep("free", 390)
+head(free, 10)
+dim(free)
+```
+
+```{r}
+c <- bind_rows(short, free)
+head(c, 10)
+
+c = c %>%
+  mutate(same.country = ifelse(country == jcountry, 1, 0))
+```
+
+```{r}
+c$predictions <- predict(m1, c)
+head(c, 10)
+arrange(c, desc(predictions))
+c[c$skater == "Nathan CHEN", ]
+```
+
+
+
+
