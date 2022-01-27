@@ -68,6 +68,19 @@ arrange(c, desc(predictions))
 c[c$skater == "Nathan CHEN", ]
 ```
 
+## Part 3
+**Simulate the judge selection process.** 
+```
+short_judge <- sample(j$judge, 9, replace=FALSE)
+
+not_short_judge <- setdiff(j$judge, short_judge)
+free_judge_short <- sample(short_judge, 5)
+
+long_judge <- c(not_short_judge, free_judge_short)
+```
+
+
+
 
 
 
