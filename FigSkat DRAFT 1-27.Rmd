@@ -79,6 +79,16 @@ free_judge_short <- sample(short_judge, 5)
 long_judge <- c(not_short_judge, free_judge_short)
 ```
 
+**Simulate event**
+```
+shortp <- c[c$segment == 'short',]
+freep <- c[c$segment == 'free',]
+
+shortp[shortp$judge == short_judge, ]
+       
+       
+aggregate(c$predictions, list(c$skater, c$segment), FUN=mean)
+```
 
 
 
