@@ -70,7 +70,7 @@ c[c$skater == "Nathan CHEN", ]
 
 ## Part 3
 **Simulate the judge selection process.** 
-```
+```{r}
 short_judge <- sample(j$judge, 9, replace=FALSE)
 
 not_short_judge <- setdiff(j$judge, short_judge)
