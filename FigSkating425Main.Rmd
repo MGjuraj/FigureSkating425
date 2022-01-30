@@ -1,0 +1,196 @@
+---
+title: "Winter Olympics 2022 Figure Skating Predictions"
+author: "Mehmed Can Olgac, B Lindsay, Mark Gjuraj, Masa Stanisavljevic"
+date: "DUE: 2/7/2022"
+output: html_document
+---
+
+## Data:
+
+Outcomes of several events over the 2019-20, 2020-21, and 2021-22 seasons:
+
+```{r}
+d = read.csv('scores.csv', stringsAsFactors = FALSE)
+str(d)
+head(d, 3)
+```
+
+The 30 skaters competing in the 2022 Winter Olympics in Beijing:
+
+```{r}
+# SKATERS
+s = read.csv('skaters2022.csv', stringsAsFactors = FALSE)
+str(s)
+head(s, 3)
+```
+
+The 13 judges (from 13 different countries) who will judge the short program, free skate, or both:
+
+```{r}
+# JUDGES
+j = read.csv('judges2022.csv', stringsAsFactors = FALSE)
+str(j)
+head(j, 3)
+```
+
+## Additional Variable(s):
+
+`same.country` is an indicator that is 1 when `country` and `jcountry` are the same, and 0 otherwise.
+
+```{r}
+library(tidyverse)
+d = d %>%
+  mutate(score = ifelse(segment == 'short',
+                        2 * score,
+                        score)) %>%
+  filter(judge != 'Mean')
+
+d = d %>%
+  mutate(same.country = ifelse(country == jcountry, 1, 0))
+```
+
+## Part 1: Regression Model for Segment Scores `score`:
+
+```{r}
+m1 = lm(score ~ segment + same.country + skater + judge, data=d)
+summary(m1)$adj.r
+```
+
+```{r, eval = FALSE, include = FALSE}
+## check the first few coefs
+coefs = as.data.frame(summary(m1)$coef)
+head(coefs,2)
+
+## check that CHEN and HANYU are near or at the top
+coefs %>% 
+  as.data.frame() %>%
+  arrange(desc(Estimate)) %>%
+  head()
+```
+
+## Part 2: Make Predictions for all Skater-Judge Combinations:
+
+```{r}
+short <- expand_grid(s, j)
+short$segment <- rep("short", 30*13)
+str(short)
+head(short, 3)
+```
+
+```{r}
+free <- expand_grid(s, j)
+free$segment <- rep("free", 30*13)
+head(free, 3)
+```
+
+```{r}
+c <- bind_rows(short, free)
+```
+
+```{r}
+c = c %>%
+  mutate(same.country = ifelse(country == jcountry, 1, 0))
+str(c)
+```
+
+```{r}
+c$predictions <- predict(m1, c)
+head(arrange(c, desc(predictions)), 10)
+```
+
+## Part 3: Simulation
+
+```{r}
+judges <- unique(c$judge)
+length(judges)
+skaters <- unique(c$skater)
+length(skaters)
+```
+*__Simulating the judge selection process:__*
+
+The short program and free skate both have 9 judges that are selected in the following way.  
+
+- **Short program judges.** Nine of these 13 judges are randomly selected for the short program. 
+- **Free skate judges.** The 4 judges that were not selected for the short program are automatically on the panel for the free skate. The remaining 5 judges are randomly chosen from the 9 who judged the short program. 
+
+```{r}
+short_judge <- sample(judges, 9, replace=FALSE)
+short_judge
+```
+
+```{r}
+not_short_judge <- setdiff(judges, short_judge)
+not_short_judge
+```
+
+```{r}
+free_judge_short <- sample(short_judge, 5)
+free_judge <- c(not_short_judge, free_judge_short)
+free_judge
+```
+
+*__Simulating the event:__*
+
+```{r}
+shortp <- c[c$judge %in% short_judge & c$segment == "short", ]
+freep <- c[c$judge %in% free_judge & c$segment == "free", ]
+```
+
+```{r}
+short_means <- aggregate(shortp$predictions, list(shortp$skater), FUN=mean)
+short_means
+```
+
+```{r}
+free_means <- aggregate(freep$predictions, list(freep$skater), FUN=mean)
+free_means
+```
+
+__TO-DO__ Then simulate the outcome of one event by randomly sampling from the normal distributions (see rnorm) for each skater for each segment, recording those score for each skater, and recording the rank of each skater (1 = highest score, 30 = lowest score). Note that only the top 24 of the 30 skaters move on to the free skate, so it’s not necessary to simulate the free skate for the bottom 6 (although you can simulate those anyway and just disregard it).
+
+*__Repeat this process 10,000 times:__*
+
+```{r}
+nsim <- 10000
+std_dev <- 13
+skater_sim <- c()
+country_sim <- c()
+sim_num <- rep(c(1:nsim), 30 * 2)
+segment_sim <- c()
+score_sim <- c()
+
+for (i in 1:30) {
+  score_sim <- append(score_sim, 
+                      rnorm(nsim, short_means$x[i], sd = std_dev))
+  segment_sim <- append(segment_sim,
+                        rep("short", nsim))
+  
+  score_sim <- append(score_sim, 
+                      rnorm(nsim, free_means$x[i], sd = std_dev))
+  segment_sim <- append(segment_sim,
+                        rep("free", nsim))
+  
+  skater_sim <- append(skater_sim, 
+                       rep(short_means$Group.1[i], nsim * 2))
+  country_sim <- append(country_sim,
+                        rep(s$country[s$skater==short_means$Group.1[i]], nsim * 2))
+}
+
+sims <- data.frame(skater_sim, country_sim, sim_num, segment_sim, score_sim)
+tail(sims)
+```
+
+## Part 4: Predictions
+
+
+
+
+
+
+__TO-DO__
+
+
+
+
+
+
