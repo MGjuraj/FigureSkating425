@@ -182,12 +182,40 @@ tail(sims)
 
 ## Part 4: Predictions
 
+```{r}
+ranks <- data.frame(matrix(data = rep(NA, nsim * 30), nrow = nsim, ncol = 30))
+places <- c("1st", "2nd", "3rd", "4th", "5th", "6th", "7th",
+                           "8th", "9th", "10th", "11th", "12th", "13th",
+                           "14th", "15th", "16th", "17th", "18th", "19th",
+                           "20th", "21st", "22nd", "23rd", "24th", "25th",
+                           "26th", "27th", "28th", "29th", "30th")
+colnames(ranks) <- places
+for (i in 1:nsim) {
+  temp1 <- sims[sims$sim_num == i, ]
+  temp2 <- aggregate(temp1$score_sim, list(temp1$skater_sim), FUN=sum)
+  ranking <- arrange(temp2, desc(x))$Group.1
+  ranks[i, ] <- ranking
+}
+```
 
+```{r}
+proportions <- data.frame(matrix(data = rep(0, 900), nrow = 30, ncol = 30))
+rownames(proportions) <- s$skater
+colnames(proportions) <- places
+```
 
+```{r}
+for (i in 1:30){
+  temp <- table(ranks[[places[i]]]) / nsim
+  for (name in names(temp)) {
+    proportions[name, i] <- temp[name]
+  }
+}
+```
 
-
-
-__TO-DO__
+```{r}
+proportions
+```
 
 
 
