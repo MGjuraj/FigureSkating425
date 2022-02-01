@@ -1,6 +1,6 @@
 ---
 title: "Winter Olympics 2022 Figure Skating Predictions"
-author: "Mehmed Can Olgac, B Lindsay, Mark Gjuraj, Masa Stanisavljevic"
+author: "Mehmed Can Olgac, B Lindsay, Mark Gjuraj"
 date: "DUE: 2/7/2022"
 output: html_document
 ---
@@ -12,7 +12,6 @@ Outcomes of several events over the 2019-20, 2020-21, and 2021-22 seasons:
 ```{r}
 d = read.csv('scores.csv', stringsAsFactors = FALSE)
 str(d)
-head(d, 3)
 ```
 
 The 30 skaters competing in the 2022 Winter Olympics in Beijing:
@@ -21,7 +20,6 @@ The 30 skaters competing in the 2022 Winter Olympics in Beijing:
 # SKATERS
 s = read.csv('skaters2022.csv', stringsAsFactors = FALSE)
 str(s)
-head(s, 3)
 ```
 
 The 13 judges (from 13 different countries) who will judge the short program, free skate, or both:
@@ -30,12 +28,7 @@ The 13 judges (from 13 different countries) who will judge the short program, fr
 # JUDGES
 j = read.csv('judges2022.csv', stringsAsFactors = FALSE)
 str(j)
-head(j, 3)
 ```
-
-## Additional Variable(s):
-
-`same.country` is an indicator that is 1 when `country` and `jcountry` are the same, and 0 otherwise.
 
 ```{r}
 library(tidyverse)
@@ -44,10 +37,19 @@ d = d %>%
                         2 * score,
                         score)) %>%
   filter(judge != 'Mean')
+```
 
+
+## Additional Variable(s):
+
+`same.country` is an indicator that is 1 when `country` and `jcountry` are the same, and 0 otherwise.
+
+```{r}
 d = d %>%
   mutate(same.country = ifelse(country == jcountry, 1, 0))
 ```
+
+___
 
 ## Part 1: Regression Model for Segment Scores `score`:
 
@@ -68,12 +70,13 @@ coefs %>%
   head()
 ```
 
+___
+
 ## Part 2: Make Predictions for all Skater-Judge Combinations:
 
 ```{r}
 short <- expand_grid(s, j)
 short$segment <- rep("short", 30*13)
-str(short)
 head(short, 3)
 ```
 
@@ -90,7 +93,6 @@ c <- bind_rows(short, free)
 ```{r}
 c = c %>%
   mutate(same.country = ifelse(country == jcountry, 1, 0))
-str(c)
 ```
 
 ```{r}
@@ -98,19 +100,21 @@ c$predictions <- predict(m1, c)
 head(arrange(c, desc(predictions)), 10)
 ```
 
+___
+
 ## Part 3: Simulation
 
 ```{r}
 judges <- unique(c$judge)
-length(judges)
+judges
 skaters <- unique(c$skater)
-length(skaters)
+skaters
 ```
 *__Simulating the judge selection process:__*
 
 The short program and free skate both have 9 judges that are selected in the following way.  
 
-- **Short program judges.** Nine of these 13 judges are randomly selected for the short program. 
+- **Short program judges.** Nine of these 13 judges are randomly selected for the short program.
 - **Free skate judges.** The 4 judges that were not selected for the short program are automatically on the panel for the free skate. The remaining 5 judges are randomly chosen from the 9 who judged the short program. 
 
 ```{r}
@@ -138,15 +142,42 @@ freep <- c[c$judge %in% free_judge & c$segment == "free", ]
 
 ```{r}
 short_means <- aggregate(shortp$predictions, list(shortp$skater), FUN=mean)
+short_means$x <- short_means$x
+colnames(short_means) <- c("skater", "score")
 short_means
 ```
 
 ```{r}
 free_means <- aggregate(freep$predictions, list(freep$skater), FUN=mean)
+colnames(free_means) <- c("skater", "score")
 free_means
 ```
 
-__TO-DO__ Then simulate the outcome of one event by randomly sampling from the normal distributions (see rnorm) for each skater for each segment, recording those score for each skater, and recording the rank of each skater (1 = highest score, 30 = lowest score). Note that only the top 24 of the 30 skaters move on to the free skate, so it’s not necessary to simulate the free skate for the bottom 6 (although you can simulate those anyway and just disregard it).
+```{r}
+std_dev <- 13
+skater_sim <- c()
+country_sim <- c()
+segment_sim <- c()
+score_sim <- c()
+for (i in 1:30) {
+  score_sim <- append(score_sim, 
+                      rnorm(1, short_means$score[i], sd = std_dev) / 2)
+  segment_sim <- append(segment_sim,
+                        rep("short", 1))
+  
+  score_sim <- append(score_sim, 
+                      rnorm(1, free_means$score[i], sd = std_dev))
+  segment_sim <- append(segment_sim,
+                        rep("free", 1))
+  
+  skater_sim <- append(skater_sim, 
+                       rep(short_means$skater[i], 1 * 2))
+  country_sim <- append(country_sim,
+                        rep(s$country[s$skater==short_means$skater[i]], 1 * 2))
+}
+sims1 <- data.frame(skater_sim, country_sim, segment_sim, score_sim)
+sims1
+```
 
 *__Repeat this process 10,000 times:__*
 
@@ -161,46 +192,59 @@ score_sim <- c()
 
 for (i in 1:30) {
   score_sim <- append(score_sim, 
-                      rnorm(nsim, short_means$x[i], sd = std_dev))
+                      rnorm(nsim, short_means$score[i], sd = std_dev) / 2)
   segment_sim <- append(segment_sim,
                         rep("short", nsim))
   
   score_sim <- append(score_sim, 
-                      rnorm(nsim, free_means$x[i], sd = std_dev))
+                      rnorm(nsim, free_means$score[i], sd = std_dev))
   segment_sim <- append(segment_sim,
                         rep("free", nsim))
   
   skater_sim <- append(skater_sim, 
-                       rep(short_means$Group.1[i], nsim * 2))
+                       rep(short_means$skater[i], nsim * 2))
   country_sim <- append(country_sim,
-                        rep(s$country[s$skater==short_means$Group.1[i]], nsim * 2))
+                        rep(s$country[s$skater==short_means$skater[i]], nsim * 2))
 }
 
 sims <- data.frame(skater_sim, country_sim, sim_num, segment_sim, score_sim)
+colnames(sims) <- c("skater", "country", "sim", "segment", "score")
+```
+
+```{r}
+head(sims[sims$skater == "Nathan CHEN", ])
+tail(sims[sims$skater == "Nathan CHEN", ])
+head(sims)
 tail(sims)
 ```
+
+___
 
 ## Part 4: Predictions
 
 ```{r}
 ranks <- data.frame(matrix(data = rep(NA, nsim * 30), nrow = nsim, ncol = 30))
-places <- c("1st", "2nd", "3rd", "4th", "5th", "6th", "7th",
-                           "8th", "9th", "10th", "11th", "12th", "13th",
-                           "14th", "15th", "16th", "17th", "18th", "19th",
-                           "20th", "21st", "22nd", "23rd", "24th", "25th",
-                           "26th", "27th", "28th", "29th", "30th")
+places <- c("p1", "p2", "p3", "p4", "p5", "p6", "p7",
+            "p8", "p9", "p10", "p11", "p12", "p13",
+            "p14", "p15", "p16", "p17", "p18", "p19",
+            "p20", "p21", "p22", "p23", "p24", "p25",
+            "p26", "p27", "p28", "p29", "p30")
 colnames(ranks) <- places
 for (i in 1:nsim) {
-  temp1 <- sims[sims$sim_num == i, ]
-  temp2 <- aggregate(temp1$score_sim, list(temp1$skater_sim), FUN=sum)
+  temp1 <- sims[sims$sim == i, ]
+  temp2 <- aggregate(temp1$score, list(temp1$skater), FUN=sum)
   ranking <- arrange(temp2, desc(x))$Group.1
   ranks[i, ] <- ranking
 }
 ```
 
 ```{r}
+ranks
+```
+
+```{r}
 proportions <- data.frame(matrix(data = rep(0, 900), nrow = 30, ncol = 30))
-rownames(proportions) <- s$skater
+rownames(proportions) <- unique(sims$skater)
 colnames(proportions) <- places
 ```
 
@@ -215,6 +259,21 @@ for (i in 1:30){
 
 ```{r}
 proportions
+# https://stackoverflow.com/questions/29511215/convert-row-names-into-first-column
+proportions <- tibble::rownames_to_column(proportions, "skater")
+proportions
+```
+
+```{r}
+scores_per_sim <- aggregate(sims$score, list(sims$skater, sims$sim), FUN = sum)
+mean_scores <- aggregate(scores_per_sim$x, list(scores_per_sim$Group.1), FUN = mean)
+mean_scores
+sd_scores <- aggregate(scores_per_sim$x, list(scores_per_sim$Group.1), FUN = sd)
+sd_scores
+proportions$score <- mean_scores$x
+proportions$sd <- sd_scores$x
+pred <- proportions[, c(1, 32, 33, 2:31)]
+pred
 ```
 
 
