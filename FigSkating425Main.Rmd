@@ -218,6 +218,12 @@ head(sims)
 tail(sims)
 ```
 
+```{r}
+##orders sim table by highest to lowest score
+
+sims[order(sims$score, decreasing = TRUE), ]
+
+```
 ___
 
 ## Part 4: Predictions
