@@ -97,10 +97,7 @@ This was the model given to us as a template.
 
 ```{r}
 # GIVEN
-model_0 = lm(score ~ segment 
-             + same.country 
-             + skater 
-             + judge, data=d)
+model_0 = lm(score ~ segment + same.country + skater + judge, data=d)
 summary(model_0)$adj.r
 ```
 
@@ -177,9 +174,7 @@ The short program and free skate both have 9 judges that are selected in the fol
 
 ```{r}
 judges <- unique(c$judge)
-judges
 skaters <- unique(c$skater)
-skaters
 ```
 
 ```{r}
@@ -208,11 +203,13 @@ freep <- c[c$judge %in% free_judge & c$segment == "free", ]
 ```{r}
 short_means <- aggregate(shortp$predictions, list(shortp$skater), FUN=mean)
 colnames(short_means) <- c("skater", "score")
+head(short_means, 3)
 ```
 
 ```{r}
 free_means <- aggregate(freep$predictions, list(freep$skater), FUN=mean)
 colnames(free_means) <- c("skater", "score")
+head(free_means, 3)
 ```
 
 ```{r}
@@ -317,11 +314,6 @@ head(sims[sims$skater == "Nathan CHEN", ])
 ___
 
 ## Part 4: Predictions
-
-
-
-
-
 
 *__Estimate the probability that each skater will finish in each place by finding the proportion of times they finished in each place in the simulations.__*
 
