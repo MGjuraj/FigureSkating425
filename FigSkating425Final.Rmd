@@ -1,0 +1,447 @@
+---
+title: "Winter Olympics 2022 Figure Skating Predictions"
+author: "Mehmed Can Olgac, B Lindsay, Mark Gjuraj"
+date: "DUE: 2/7/2022"
+output: html_document
+---
+
+```{r}
+set.seed(123)
+```
+
+## Data:
+
+Outcomes of several events over the 2019-20, 2020-21, and 2021-22 seasons:
+
+```{r}
+d = read.csv('scores.csv')
+str(d)
+```
+
+This data set has the following columns: 
+
+- `season` - e.g. 2122 means the 2021-22 season.
+- `event` - abbreviation of the event name. For example, US Nationals is coded `natusa`. See skatingscores.com for other abbreviations. 
+- `segment` - column with either `short` or `free`.
+- `skater` - the name of the figure skater.
+- `segment.id`- unique identifier for the program. `season-event-segment-skater`.
+- `country` - the country of the skater.
+- `judge` - the name of the judge.
+- `jcountry` - the country of the judge.
+- `score` - the score that was given by this judge for this skater in this segment.
+
+The 30 skaters competing in the 2022 Winter Olympics in Beijing:
+
+```{r}
+s = read.csv('skaters2022.csv')
+str(s)
+```
+
+The 13 judges (from 13 different countries) who will judge the short program, free skate, or both:
+
+```{r}
+j = read.csv('judges2022.csv')
+str(j)
+```
+
+We double the short scores for now, as the free program scores tend to be twice as large.
+
+```{r}
+library(tidyverse)
+d = d %>%
+  mutate(score = ifelse(segment == 'short',
+                        2 * score,
+                        score)) %>%
+  filter(judge != 'Mean')
+```
+
+## Additional Variable(s):
+
+`same.country` is an indicator that is 1 when `country` and `jcountry` are the same, and 0 otherwise.
+
+```{r}
+# GIVEN
+d = d %>%
+  mutate(same.country = ifelse(country == jcountry, 1, 0))
+```
+
+`same.country_name` is meant to serve as an interaction term between `same.country` and `country`, which takes the country name itself as its value if the judge and the skater are from the same country. We theorized that judges from certain countries might have stronger or weaker than average bias for Olympians who are their nationals. We will show below the coefficients some of these countries had and discuss whether or not the results are worthy/interesting.
+
+```{r}
+d = d %>%
+  mutate(same.country_name = ifelse(same.country==1, jcountry, "different"))
+```
+
+`same.country_nameofjudge` is meant to serve as an interaction term between `same.country` and `judge`, which takes the judge's name as its value if the judge and skater are from the same country. We theorized that nationality bias might be a personality trait rather than a nationality trait in that certain individuals might have a stronger predilection to be more lenient with the skaters from the same country. Hence, we wanted to look at the interaction of `same.country` and `judge` variables.
+
+```{r}
+d = d %>%
+  mutate(same.country_nameofjudge = ifelse(same.country==1, judge, "different"))
+```
+
+We plan on using `season` as a predictor, so we change its data type from `int` to `chr`.
+
+```{r}
+d$season <- as.character(d$season)
+```
+
+The `event` is a variable of interest because its possible that skaters' performances could vary depending on the magnitude of the competition that they are competing in.
+
+```{r}
+table(d$event)
+```
+
+According to [skatingscores.com](https://skatingscores.com/), the following values of `event` (European Championships, Four Continents, and World Championships respectively) are the most prominent competitions in skating present in our data set, so we create a new variable `competition` that classifies these as "major," and the rest of the competitions as "minor." Such grouping is useful because, while our data is devoid of Olympic scores, the Olympics are definitely a "major" competition.
+
+```{r}
+d = d %>%
+  mutate(competition = ifelse(event %in% c("ec", "4cc", "wc"), "major", "minor"))
+```
+
+```{r}
+table(d$competition)
+```
+
+___
+
+## Part 1: Regression Model for Segment Scores `score`:
+
+This was the model given to us as a template.
+
+```{r}
+model_0 = lm(score ~ segment + same.country + skater + judge, data=d)
+summary(model_0)$adj.r
+```
+
+Here is a linear model using all of the additional variables outlined above.
+
+```{r}
+model_1 <- lm(score ~ segment + same.country + skater + judge 
+              + season 
+              + same.country_name 
+              + same.country_nameofjudge 
+              + competition, data=d)
+summary(model_1)$adj.r
+```
+
+This is the model `m1` we will proceed with; notice how removing `same.country` and `same.country_name` does not alter the adjusted r-squared.
+
+```{r}
+m1 <- lm(score ~ segment + skater + judge 
+         + season + same.country_nameofjudge + competition, data=d)
+summary(m1)$adj.r
+```
+
+*__Comments on Coefficients:__*
+
+
+___
+
+## Part 2: Make Predictions for all Skater-Judge Combinations:
+
+*__Create all combinations:__*
+
+```{r}
+short <- expand_grid(s, j)
+short$segment <- rep("short", 30*13)
+head(short, 3)
+```
+
+```{r}
+free <- expand_grid(s, j)
+free$segment <- rep("free", 30*13)
+head(free, 3)
+```
+
+```{r}
+c <- bind_rows(short, free)
+```
+
+Below we add all of the additional variables we used in our linear model `m1`. Since the Winter Olympics are taking place in 2022, all of the skater-judge combinations in our data frame `c` will have a `season = "2122"`.
+
+```{r}
+c = c %>%
+  mutate(same.country = ifelse(country == jcountry, 1, 0))
+
+c = c %>%
+  mutate(same.country_nameofjudge = ifelse(same.country == 1, judge, "different"))
+
+c$season <- rep("2122", nrow(c))
+
+c$competition <- rep("major", nrow(c))
+```
+
+*__Make predictions for all combinations:__*
+
+```{r, warning = FALSE}
+c$predictions <- predict(m1, c)
+```
+___
+
+## Part 3: Simulation
+
+*__Simulating the judge selection process:__*
+
+The short program and free skate both have 9 judges that are selected in the following way:  
+
+- **Short program judges.** Nine of these 13 judges are randomly selected for the short program.
+- **Free skate judges.** The 4 judges that were not selected for the short program are automatically on the panel for the free skate. The remaining 5 judges are randomly chosen from the 9 who judged the short program.
+
+```{r}
+judges <- unique(c$judge)
+skaters <- unique(c$skater)
+```
+
+```{r}
+short_judge <- sample(judges, 9, replace=FALSE)
+short_judge
+```
+
+```{r}
+not_short_judge <- setdiff(judges, short_judge)
+not_short_judge
+```
+
+```{r}
+free_judge_short <- sample(short_judge, 5, replace=FALSE)
+free_judge <- c(not_short_judge, free_judge_short)
+free_judge
+```
+
+Above we used the functions `sample` and `setdiff` to simulate the judge selection process for the short and free skate programs.
+
+*__Simulating the event:__*
+
+```{r}
+shortp <- c[c$judge %in% short_judge & c$segment == "short", ]
+freep <- c[c$judge %in% free_judge & c$segment == "free", ]
+```
+
+```{r}
+short_means <- aggregate(shortp$predictions, list(shortp$skater), FUN=mean)
+colnames(short_means) <- c("skater", "score")
+head(short_means, 3)
+```
+
+```{r}
+free_means <- aggregate(freep$predictions, list(freep$skater), FUN=mean)
+colnames(free_means) <- c("skater", "score")
+head(free_means, 3)
+```
+
+```{r}
+nsim <- 1
+std_dev <- 13
+skater_sim <- c()
+country_sim <- c()
+segment_sim <- c()
+score_sim <- c()
+
+for (i in 1:30) {
+  score_sim <- append(score_sim, 
+                      rnorm(nsim, short_means$score[i], sd = std_dev * 2) / 2)
+  segment_sim <- append(segment_sim,
+                        rep("short", nsim))
+  
+  score_sim <- append(score_sim, 
+                      rnorm(nsim, free_means$score[i], sd = std_dev))
+  segment_sim <- append(segment_sim,
+                        rep("free", nsim))
+  
+  skater_sim <- append(skater_sim, 
+                       rep(short_means$skater[i], nsim * 2))
+  country_sim <- append(country_sim,
+                        rep(s$country[s$skater==short_means$skater[i]], nsim * 2))
+}
+
+sims1 <- data.frame(skater_sim, country_sim, segment_sim, score_sim)
+dim(sims1)
+head(sims1, 10)
+```
+
+Here we used a for-loop to simulate the scores of each of the 30 skaters for the short and free segments. 
+
+*__Repeat this process 10,000 times:__*
+
+```{r}
+nsim <- 10000
+# Instructions suggest standard deviation of 13
+std_dev <- 13
+skater_sim <- c()
+country_sim <- c()
+sim_num <- rep(c(1:nsim), 30 * 2)
+segment_sim <- c()
+score_sim <- c()
+
+for (i in 1:30) {
+  # simulate judge selection
+  short_judge <- sample(judges, 9, replace=FALSE)
+  not_short_judge <- setdiff(judges, short_judge)
+  free_judge_short <- sample(short_judge, 5)
+  free_judge <- c(not_short_judge, free_judge_short)
+  shortp <- c[c$judge %in% short_judge & c$segment == "short", ]
+  freep <- c[c$judge %in% free_judge & c$segment == "free", ]
+  short_means <- aggregate(shortp$predictions, list(shortp$skater), FUN=mean)
+  colnames(short_means) <- c("skater", "score")
+  free_means <- aggregate(freep$predictions, list(freep$skater), FUN=mean)
+  colnames(free_means) <- c("skater", "score")
+  
+  
+  ### NOTE: here is where we are dividing by 2, reversing what we did to
+  ### the short scores earlier.
+  score_sim <- append(score_sim, 
+                      rnorm(nsim, short_means$score[i], sd = std_dev * 2) / 2)
+  segment_sim <- append(segment_sim,
+                        rep("short", nsim))
+  score_sim <- append(score_sim, 
+                      rnorm(nsim, free_means$score[i], sd = std_dev))
+  segment_sim <- append(segment_sim,
+                        rep("free", nsim))
+  skater_sim <- append(skater_sim, 
+                       rep(short_means$skater[i], nsim * 2))
+  country_sim <- append(country_sim,
+                        rep(s$country[s$skater==short_means$skater[i]], nsim * 2))
+}
+
+sims <- data.frame(skater_sim, country_sim, sim_num, segment_sim, score_sim)
+colnames(sims) <- c("skater", "country", "sim", "segment", "score")
+```
+
+```{r}
+dim(sims)
+head(sims, 10)
+```
+
+Above, we used the same process of simulating each skater's scores from the previous cells of code, this time running it 10,000 times to create the `sims` data frame. 
+
+```{r}
+# https://www.statology.org/dplyr-rank-by-group/
+library(dplyr)
+sims <- sims %>% 
+  arrange(sim, desc(score)) %>% 
+  group_by(sim, segment) %>% 
+  mutate(rank = rank(-score)) %>%
+  arrange(skater)
+sims <- as.data.frame(sims)
+```
+
+```{r}
+str(sims)
+```
+
+The data frame `sims` has the following columns:
+
+- `skater` - the name of the figure skater.
+- `country` - the country of the skater.
+- `sim` - the simulation number.
+- `segment` - column with either `short` or `free`.
+- `score` - the score for this skater and segment in this simulation.
+- `rank` - the rank for this skater in this segment for this simulation.
+
+```{r}
+head(sims[sims$skater == "Nathan CHEN", ], 10)
+```
+
+Nathan Chen sits at the top of the rankings for many of the simulations, which is what we would expect.
+
+___
+
+## Part 4: Predictions
+
+*__Estimate the probability that each skater will finish in each place by finding the proportion of times they finished in each place in the simulations.__*
+
+```{r}
+# Implementation done manually with for loop
+ranks <- data.frame(matrix(data = rep(NA, nsim * 30), nrow = nsim, ncol = 30))
+places <- c("p1", "p2", "p3", "p4", "p5", "p6", "p7",
+            "p8", "p9", "p10", "p11", "p12", "p13",
+            "p14", "p15", "p16", "p17", "p18", "p19",
+            "p20", "p21", "p22", "p23", "p24", "p25",
+            "p26", "p27", "p28", "p29", "p30")
+colnames(ranks) <- places
+for (i in 1:nsim) {
+  temp1 <- sims[sims$sim == i, ]
+  temp2 <- aggregate(temp1$score, list(temp1$skater), FUN=sum)
+  ranking <- arrange(temp2, desc(x))$Group.1
+  ranks[i, ] <- ranking
+}
+```
+
+```{r}
+head(ranks[, c("p1", "p2", "p3", "p4", "p5")], 3)
+```
+
+Here, we used a for-loop to fill a data frame with 30 columns (for the ranking of skaters) and 10,000 rows (for each of the 10,000 times we simulate the competition), where each row corresponds to the final standings of that particular simulation. Specifically, the code iterates through each of the 10,000 simulations, sums the short and free scores for each individual skater, arranges the skaters in descending order, and then stores that vector as a row in `ranks`. 
+
+What we end up seeing is that the same five-to-six skaters tend to appear in the first five columns, meaning the same few skaters are simulated to place in the top five. They do, however, appear to be ranked in a different order most of the time.
+
+```{r}
+proportions <- data.frame(matrix(data = rep(0, 900), nrow = 30, ncol = 30))
+rownames(proportions) <- sort(skaters)
+colnames(proportions) <- places
+```
+
+```{r}
+for (i in 1:30){
+  temp <- table(ranks[[places[i]]]) / nsim
+  for (name in names(temp)) {
+    proportions[name, i] <- temp[name]
+  }
+}
+```
+
+```{r}
+# https://stackoverflow.com/questions/29511215/convert-row-names-into-first-column
+proportions <- tibble::rownames_to_column(proportions, "skater")
+```
+
+Here we create the data frame `proportions`, again using a for-loop to fill it with the simulated proportions of the amount of times each of the 30 skaters finished in each place. 
+
+```{r}
+scores_per_sim <- aggregate(sims$score, list(sims$skater, sims$sim), FUN = sum)
+head(scores_per_sim, 3)
+mean_scores <- aggregate(scores_per_sim$x, list(scores_per_sim$Group.1), FUN = mean)
+head(mean_scores, 3)
+sd_scores <- aggregate(scores_per_sim$x, list(scores_per_sim$Group.1), FUN = sd)
+head(sd_scores, 3)
+```
+
+```{r}
+proportions$score <- mean_scores$x
+proportions$sd <- sd_scores$x
+pred <- proportions[, c(1, 32, 33, 2:31)]
+```
+
+Finally, we found the mean and standard deviations (using the `aggregate` function) of the simulated scores. Then we combined those values for each skater with the calculated proportion of each skater finishing in each place from the previous table all into one data frame called `pred`. This data frame predicts the scores of each skater, and gives a probability that they will finish in any particular position.
+
+The data frame `pred` has one row per skater, with these columns. 
+
+  - `skater`
+  - `score` - mean total score
+  - `sd` - standard deviation of score
+  - `p1`, `p2`, `p3`, etc. - the probability of finishing 1st, 2nd, 3rd, etc
+
+
+```{r}
+dim(pred)
+```
+
+```{r}
+### Checking result
+pred[pred$skater == "Nathan CHEN", ]
+```
+
+According to `score` in `pred`, the Men's Single Figure Skating podium at the 2022 Winter Olympics will be:
+
+```{r}
+head(arrange(pred, desc(score)), 3)[, c("skater", "score", "sd", "p1", "p2", "p3")]
+```
+___
+
+### Submission
+
+```{r}
+write.csv(sims, "/Users/markgjuraj/Desktop/sims.csv")
+write.csv(pred, "/Users/markgjuraj/Desktop/pred.csv")
+```
+
