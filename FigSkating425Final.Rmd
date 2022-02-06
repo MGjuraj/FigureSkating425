@@ -132,6 +132,21 @@ m1 <- lm(score ~ segment + skater + judge
 summary(m1)$adj.r
 ```
 
+**Female Coeffs** 
+```{r}
+m2 <- lm(score ~ judge, data=d)
+
+summary(m2)$adj.r
+
+coefss <- as.data.frame(summary(m2)$coefficients)
+
+coefss <- coefss[order(coefss$Estimate, decreasing=TRUE), ]
+
+head(coefss, 10)
+
+```
+While this model is very rudimentary with an adjusted $r^2$ value of .21, something interesting to note is that when sorting in decreasing order of coeffs we see that the top 10 highest scores predicted by judge come from all female judges.
+
 *__Comments on Coefficients:__*
 
 
