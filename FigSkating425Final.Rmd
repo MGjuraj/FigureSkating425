@@ -147,8 +147,46 @@ head(coefss, 10)
 ```
 While this model is very rudimentary with an adjusted $r^2$ value of .21, something interesting to note is that when sorting in decreasing order of coeffs we see that the top 10 highest scores predicted by judge come from all female judges.
 
-*__Comments on Coefficients:__*
 
+**Country Coeffs** 
+```{r}
+model_coeffs <- lm(score ~ segment + same.country + skater + judge 
+              + season 
+              + same.country_name, data=d)
+summary(model_coeffs)$coefficients
+
+coefs = as.data.frame(summary(model_coeffs)$coefficients)
+row_nums <- grep("same.country_name", rownames(coefs))
+
+country_biases <- coefs[row_nums,]
+country_biases <- arrange(country_biases, desc(Estimate))
+#print(country_biases)
+
+country_biases$Countries <- c("China", "Russian Fed.", "Georgia", "France", "Israel", 
+                        "Ireland", "Germany", "United States", "Italy", "Turkey",
+                        "Sprain", "Latvia", "Great Britain", "Switzerland",
+                        "Finland", "Hungary", "Mexico", "Estonia", "Austria",
+                        "Norway", "Belarus", "Denmark", "Australia", "Netherlands",
+                        "Poland", "Ukraine", "Bulgaria", "Taiwan", "Canada",
+                        "Azerbaijan", "Czechia", "Sweden", "Kazakhstan", "Slovakia",
+                        "Japan", "Korea", "?")
+
+col_order <- c("Countries", "Estimate", "Std. Error",
+               "t value", "Pr(>|t|)")
+country_biases <- country_biases[, col_order]
+print(country_biases)
+
+# This table is interesting given that China and Russia are at the top of it.
+# The fact that these countries have a high coefficient for the same.country_name
+# variable implies that the judges from these countries might be more inclined to 
+# exhibit biases towards their own skaters than judges from other countries to
+# their. On the other hand, one should note that standard errors are large due
+# to the nature of our data: we simply don't have enough instances where a judge
+# is evaluating a skater from their own country so as to be able to regress with
+# reasonable standard error. Hence this table and the corresponding coefficients
+# should be taken with a grain of salt and be an inspiration for further research,
+# rather than a basis to direct allegations.
+```
 
 ___
 
